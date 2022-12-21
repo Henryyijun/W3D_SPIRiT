@@ -1,4 +1,4 @@
-function [u] = SPIRiT_PD3O(g, mask, lev, lambda, max_iter, ker, ker_tra)
+function [u] = SPIRiT_PD3O(g, mask, lev, lambda, max_iter, ker, ker_tra,Lip)
 
 %%
 artifact_image = IFFT2_3D_N(g);
@@ -11,9 +11,9 @@ A = @(x) VidHaarDec3S(IFFT2_3D_N(un_mask .* x), lev);
 At = @(x) un_mask .* FFT2_3D_N(VidHaarRec3S(x, lev));
 
 %%
-Lip =  Est_Lip_Ker_Mat_C(g, ker, [size(ker, 1), size(ker, 2)]);
-gamma = 1.99/(9*(1+Lip)^2);
-delta = 0.99 / gamma;
+% Lip =  Est_Lip_Ker_Mat_C(g, ker, [size(ker, 1), size(ker, 2)]);
+gamma = 1.99/((1+Lip)^2);
+delta = 0.99/gamma;
 
 %%
 uk = g;
@@ -21,7 +21,7 @@ sk = A(zeros(size(uk)));
 WinSize = 3; 
 AveKer = ones(WinSize)/(WinSize*WinSize);
 Thr = zeros(size(sk));
-
+gamma_At_sk = zeros(size(uk));
 global gpu_enable
 if gpu_enable == true
   uk = gpuArray(uk);
@@ -33,6 +33,7 @@ if gpu_enable == true
   un_mask = gpuArray(un_mask);
   ker = gpuArray(ker);
   ker_tra = gpuArray(ker_tra);
+  gamma_At_sk = gpuArray(gamma_At_sk);
 end
 for k = 1:max_iter
   Qu_g = un_mask .* uk + g;
@@ -41,13 +42,13 @@ for k = 1:max_iter
   
   uk_gamma_gradient_f = uk - gamma * gradient_f;
   
-  gamma_At_sk_uk_gamma_gradient_f = gamma*At(sk) - uk_gamma_gradient_f;
+  gamma_At_sk_uk_gamma_gradient_f = gamma_At_sk - uk_gamma_gradient_f;
   xk = sk - delta * A(gamma_At_sk_uk_gamma_gradient_f);
   
   % y = VidHaarDec3S(IFFT2_3D_N(un_mask .* uk + g), lev);
   delta_xk_z = xk + delta*z;
 
-  if k < 40 && mod(k,3) == 1
+  if k < 10 && mod(k,3) == 1
     y = VidHaarDec3S(IFFT2_3D_N(un_mask .* uk + g), lev);
     for l = 1:lev
       Sigma = imfilter(abs(y(:,:,:,[2,3,4,5]+5*(l-1))), AveKer,'replicate');
@@ -70,13 +71,15 @@ for k = 1:max_iter
   %    sk(:,:,:,[2,3,4,5]+5*(l-1)) = xk(:,:,:,[2,3,4,5]+5*(l-1)) - ...
   %      delta * wthresh(delta_xk_z(:,:,:,[2,3,4,5]+5*(l-1)), 's', Thr(:,:,:,[1,2,3,4]+4*(l-1))/delta ) + delta * z(:,:,:,[2,3,4,5]+5*(l-1));
   % end
-  
-  uk = uk_gamma_gradient_f - gamma*At(sk);
+  gamma_At_sk = gamma*At(sk);
+  uk = uk_gamma_gradient_f - gamma_At_sk;
   figure(22)
   imshow(sos(IFFT2_3D_N(un_mask .*uk + g)), []);
   fprintf("At iteration %d\n", k);
 end
-
+uk = gather(uk);
+g = gather(g);
+un_mask = gather(un_mask);
 u = sos(IFFT2_3D_N(un_mask .*uk + g));
 end
 

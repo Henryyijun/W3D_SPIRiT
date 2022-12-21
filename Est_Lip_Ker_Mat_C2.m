@@ -1,4 +1,4 @@
-function  [Lip] = Est_Lip_Ker_Mat_C(Ful_kspace,Ker,Ker_Size)
+function  [Lip] = Est_Lip_Ker_Mat_C2(Ful_kspace,Ker,Ker_Size)
 %     Function:This  function is to Lipschitz estimation of the matrix  [ C] 
 %       Input:
 %       Ful_kspace: The full k-space data,the size is same as the FOV, with
@@ -18,9 +18,10 @@ Ker_Num = 1;
 Ker_Matrix = zeros(size(Ful_kspace,1),size(Ful_kspace,2)); 
 for Coi_Num=1:Coi
 for i=1:Coi
-Ker_Matrix(1:Ker_Size(1), 1:Ker_Size(2)) = Ker(:,:,i,Coi_Num);
-Ker_Matrix_Circ = circshift(Ker_Matrix, [-fix((Ker_Size(1)-1)/2) -fix((Ker_Size(2)-1)/2)]);
-Ker_Matrix_Circ_FFT(:,:,Ker_Num) = fft2(Ker_Matrix_Circ);%/sqrt(Row*Col);%;    
+% Ker_Matrix(1:Ker_Size(1), 1:Ker_Size(2)) = Ker(:,:,i,Coi_Num);
+% Ker_Matrix_Circ = circshift(Ker_Matrix, [-fix((Ker_Size(1)-1)/2) -fix((Ker_Size(2)-1)/2)]);
+Ker_Matrix_Circ_FFT(:,:,Ker_Num) = fft2( Ker(:,:,i,Coi_Num));%/sqrt(Row*Col);%;    
+eigVals(:,Ker_Num) = eig(Ker_Matrix_Circ_FFT(:,:,Ker_Num));
 Ker_Num = Ker_Num+1; 
 end
 end
@@ -28,16 +29,16 @@ end
 
 %%
 % Ind = eye(Coi);
-Eig_Val = zeros(Row*Col,1);
-Eig_Num = 1;
-for i=1:Row
-    for j=1:Col
-        Eig_Val(Eig_Num) =norm(reshape(Ker_Matrix_Circ_FFT(i,j,:),Coi,Coi));  
+% Eig_Val = zeros(Row*Col,1);
+% Eig_Num = 1;
+% for i=1:Row
+%     for j=1:Col
+%         Eig_Val(Eig_Num) =norm(reshape(Ker_Matrix_Circ_FFT(i,j,:),Coi,Coi));  
        
-    end
+%     end
 
-end
-Lip =  max(Eig_Val);
+% end
+Lip =  max(abs(eigVals(:)));
 
 return;
 

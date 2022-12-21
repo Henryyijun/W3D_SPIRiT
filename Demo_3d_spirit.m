@@ -1,22 +1,27 @@
 
 clear
+addpath utils
 % -----------------load full k-space image---------------
-Slice  = 17;%29 ;
-FilName = ['./data/05_t2_tse_tra_512_s33_3mm_',num2str(Slice) '.mat'];
+Slice  = 29;%29 ;
+FilName = ['./data/05_t2_tse_tra_512_s33_3mm_29.mat'];
 load(FilName);
            
 % ------------process---------------------
-ksfull = NormalizedCoeByEnergy(ksfull);
+% ksfull = NormalizedCoeByEnergy(ksfull);
 KsData = ksfull(:,:,:); %2:4:end
+% ImData = ifft2_3D(KsData);
+% ImData = NormalizedCoeByEnergy(ImData);
+% KsData = fft2_3D(ImData);
+
 %%  Parameter settings 
 R = [4];
 ACS_Line = [48];
-Mask_Type = 'unif'; %unif  random
+Mask_Type = 'random'; %unif  random
 Lev = 2;
 Rho = 1;
 % lambda = [0.014, 0.02];
 lambda = [0.0520, 0.0053];
-Iter_Out = 50;
+Iter_Out = 100;
 Iter_In = 5;        
 
 
@@ -30,13 +35,13 @@ switch Mask_Type
         [Mask,~] = FindMask(size(KsData),R,AcsLoc);
          SamRate = round(sum(Mask(:))/size(Mask,1)/size(Mask,2)/size(Mask,3)*100);  %Keep the smapling rate 
     case 'random'
-      Mask = imread('./data/CartesianMask512_0_15_2.png');  %Get a sampling model of k-space data
+      Mask = imread('./data/CartesianMask512_0_25_4.png');  %Get a sampling model of k-space data
  
         % get size of calibration area from mask
         %  SamRate = round(sum(Mask(:))/size(Mask,1)/size(Mask,2)*100);  %Keep the smapling rate 
          Mask = repmat(Mask', [1 1 size(KsData,3)]);
          Mask = logical(Mask);
-        [CalibSize, ~] = getCalibSize_1D_Edt( (Mask(:,:,1)));
+        [CalibSize, ~] = getCalibSize( (Mask(:,:,1)));
         ACS_Line = CalibSize(1);
     otherwise
         error('Please input "unif" or "random"');
@@ -44,29 +49,24 @@ end
                           
 Mask_Un  = ~Mask;              % Unsample positions
 % -----------------get spirit kernel
-Ker_Size= [9 9];
+Ker_Size= [3 3];
 [Ker,Ker_Tra]=Kernel_Estimation(KsData,Ker_Size,ACS_Line); %(:,100:412,:) (240:272,240:272,:)
-Lip_C = Est_Lip_Ker_Mat_C(KsData, Ker, Ker_Size);
-g= zeros(size(KsData));
-g(Mask) = KsData(Mask);
+Lip = Est_Lip_Ker_Mat_C2(KsData, Ker, Ker_Size);
 
-%%
-% ImData = ifft2_3D(KsData);
-% ImData = NormalizedCoeByEnergy(ImData);
-% g1 = fft2_3D(ImData);
+Lip
 g1 = KsData .* Mask;
-% g1 = KsData .* Mask;
-% g1 = NormalizedCoeByEnergy(g1);
 Img = IFFT2_3D_N(g1);
 ImgSoS = SoS(Img);
 figure(98);
 imshow(ImgSoS,[]);
-lambda1 = 0.1;
+
 global gpu_enable;
 gpu_enable = true;
+
+lambda1 = 0.85;
 disp("begin");
 tic
-u1 = SPIRiT_PD3O(g1,Mask,Lev,lambda1,Iter_Out,Ker, Ker_Tra);
+u1 = SPIRiT_PD3O(g1,Mask,Lev,lambda1,Iter_Out,Ker, Ker_Tra,Lip);
 toc;
 figure(900)
 imshow(u1,[]);
@@ -75,11 +75,9 @@ res1 = u1 ./ max(u1(:));
 imwrite(res1, "./result/PD3O.png");
 % 
 % 
-% ImData = ifft2_3D(KsData);
-% ImData = NormalizedCoeByEnergy(ImData);
-% g2 = fft2_3D(ImData);
+
 g2 = KsData .* Mask;
-lambda2 = 0.55;
+lambda2 = 0.85;
 tic;
 [u2] = Spirit_3D_S( g2,Mask,Lev,lambda2,Rho,Iter_Out,Iter_In,...
     Ker, Ker_Tra);
